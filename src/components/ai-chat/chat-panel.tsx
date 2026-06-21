@@ -19,8 +19,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import {
+  GEMINI_MODELS,
   aiGuideDismissedAtom,
+  aiProviderAtom,
+  geminiModelAtom,
   notesAtom,
   ollamaModelsAtom,
   selectedModelAtom,
@@ -58,8 +62,10 @@ const QUICK_ACTIONS = [
  * what the student is viewing.
  */
 export function ChatPanel({ onCollapse }: { onCollapse?: () => void }) {
+  const [provider, setProvider] = useAtom(aiProviderAtom);
   const [models, setModels] = useAtom(ollamaModelsAtom);
   const [model, setModel] = useAtom(selectedModelAtom);
+  const [geminiModel, setGeminiModel] = useAtom(geminiModelAtom);
   const [guideDismissed, setGuideDismissed] = useAtom(aiGuideDismissedAtom);
   const [showGuide, setShowGuide] = useState(!guideDismissed);
   const [input, setInput] = useState("");
@@ -71,13 +77,17 @@ export function ChatPanel({ onCollapse }: { onCollapse?: () => void }) {
     return note ? `Titolo: ${note.title}\n\n${blocksToPlainText(note.content)}` : "";
   }, [notes, params?.id]);
 
+  // Active model + readiness depend on the provider: Gemini always has a model
+  // (cloud), Ollama needs one discovered from the local server.
+  const activeModel = provider === "gemini" ? geminiModel : model;
   const { messages, status, error, send, stop, clear } = useAI({
-    model,
+    provider,
+    model: activeModel,
     context: getContext,
   });
 
   const streaming = status === "streaming";
-  const ready = Boolean(model);
+  const ready = Boolean(activeModel);
 
   const handleModels = useCallback(
     (list: string[]) => {
@@ -107,20 +117,6 @@ export function ChatPanel({ onCollapse }: { onCollapse?: () => void }) {
         <Sparkles className="size-4 text-primary" />
         <h2 className="text-sm font-medium">MattIA</h2>
         <div className="ml-auto flex items-center gap-1">
-          {models.length > 0 && (
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="max-w-28 rounded-md border border-border bg-transparent px-2 py-1 text-xs"
-              aria-label="Modello"
-            >
-              {models.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          )}
           {messages.length > 0 && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -168,7 +164,59 @@ export function ChatPanel({ onCollapse }: { onCollapse?: () => void }) {
         </div>
       </div>
 
-      <OllamaStatus onModels={handleModels} />
+      {/* Provider + model selector */}
+      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+        <div className="inline-flex rounded-md border border-border p-0.5 text-xs">
+          {(["gemini", "ollama"] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setProvider(p)}
+              className={cn(
+                "rounded px-2 py-0.5 capitalize transition-colors",
+                provider === p
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {p === "gemini" ? "Gemini" : "Ollama"}
+            </button>
+          ))}
+        </div>
+
+        {provider === "gemini" ? (
+          <select
+            value={geminiModel}
+            onChange={(e) => setGeminiModel(e.target.value)}
+            className="ml-auto max-w-40 rounded-md border border-border bg-transparent px-2 py-1 text-xs"
+            aria-label="Modello Gemini"
+          >
+            {GEMINI_MODELS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        ) : models.length > 0 ? (
+          <select
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            className="ml-auto max-w-40 rounded-md border border-border bg-transparent px-2 py-1 text-xs"
+            aria-label="Modello Ollama"
+          >
+            {models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="ml-auto text-xs text-muted-foreground">
+            nessun modello
+          </span>
+        )}
+      </div>
+
+      {provider === "ollama" && <OllamaStatus onModels={handleModels} />}
 
       {showGuide && (
         <AiGuide

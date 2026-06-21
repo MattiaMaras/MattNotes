@@ -11,7 +11,7 @@
  *
  * Bump VERSION to invalidate old caches on the next activation.
  */
-const VERSION = "v1";
+const VERSION = "v2";
 const SHELL_CACHE = `mattnotes-shell-${VERSION}`;
 const RUNTIME_CACHE = `mattnotes-runtime-${VERSION}`;
 const PRECACHE = ["/", "/app", "/review", "/icon.svg", "/manifest.webmanifest"];
@@ -90,8 +90,11 @@ self.addEventListener("fetch", (event) => {
         const cached = await caches.match(req);
         const network = fetch(req)
           .then((res) => {
+            // Clone synchronously, before `res` is returned/consumed — otherwise
+            // the deferred clone fails with "Response body is already used".
             if (res && res.status === 200) {
-              caches.open(RUNTIME_CACHE).then((c) => c.put(req, res.clone()));
+              const copy = res.clone();
+              caches.open(RUNTIME_CACHE).then((c) => c.put(req, copy));
             }
             return res;
           })

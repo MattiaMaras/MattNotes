@@ -73,7 +73,29 @@ export const snapshotsAtom = atomWithStorage<NoteSnapshot[]>(
   { getOnInit: true },
 );
 
-// --- AI model selection (shared by the chat panel and flashcard generation) -
+// --- AI provider + model selection -----------------------------------------
+
+/** Which AI backend to use. `gemini` runs in the cloud (Vercel serverless, free
+ *  tier) and is the default; `ollama` runs locally on the user's machine. */
+export type AiProvider = "gemini" | "ollama";
+
+export const aiProviderAtom = atomWithStorage<AiProvider>(
+  "mattnotes:ai-provider",
+  "gemini",
+  undefined,
+  { getOnInit: true },
+);
+
+/** Gemini models offered in the picker (free tier). */
+export const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"] as const;
+
+/** Selected Gemini model; persisted. */
+export const geminiModelAtom = atomWithStorage<string>(
+  "mattnotes:gemini-model",
+  GEMINI_MODELS[0],
+  undefined,
+  { getOnInit: true },
+);
 
 /** Currently selected Ollama model; persisted so it's remembered. */
 export const selectedModelAtom = atomWithStorage<string>(

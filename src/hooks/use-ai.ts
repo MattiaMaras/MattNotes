@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { chatSystemPrompt, getOllamaUrl } from "@/lib/ollama";
+import { chatSystemPrompt } from "@/lib/ai/prompts";
+import { getOllamaUrl } from "@/lib/ollama";
+import type { AiProvider } from "@/lib/store/atoms";
 
 export interface ChatMessage {
   id: string;
@@ -12,16 +14,18 @@ export interface ChatMessage {
 export type ChatStatus = "idle" | "streaming" | "error";
 
 /**
- * Streaming chat against the user's local Ollama (called directly from the
- * browser — see `lib/ollama.ts`). Reads the NDJSON stream token-by-token and
- * appends to the in-flight assistant message. The conversation history is sent
- * on every turn; `context()` supplies the current note text, evaluated lazily at
- * send time so it's always fresh.
+ * Streaming chat. Two providers, same NDJSON stream shape (`{message:{content}}`):
+ *  - `gemini`: POST to our serverless `/api/ai/chat` (key stays on the server);
+ *  - `ollama`: POST directly to the user's local Ollama (`lib/ollama.ts`).
+ * The conversation history is sent on every turn; `context()` supplies the
+ * current note text, evaluated lazily at send time so it's always fresh.
  */
 export function useAI({
+  provider,
   model,
   context,
 }: {
+  provider: AiProvider;
   model?: string;
   context?: () => string;
 }) {
@@ -49,24 +53,42 @@ export function useAI({
       const controller = new AbortController();
       abortRef.current = controller;
 
+      const ctx = context?.() ?? "";
+      const plain = history.map(({ role, content }) => ({ role, content }));
+
       try {
-        const res = await fetch(`${getOllamaUrl()}/api/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            model,
-            stream: true,
-            messages: [
-              { role: "system", content: chatSystemPrompt(context?.() ?? "") },
-              ...history.map(({ role, content }) => ({ role, content })),
-            ],
-          }),
-        });
+        const res =
+          provider === "gemini"
+            ? // Server-side Gemini: it builds the system prompt + holds the key.
+              await fetch("/api/ai/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                signal: controller.signal,
+                body: JSON.stringify({ model, context: ctx, messages: plain }),
+              })
+            : // Local Ollama, called directly from the browser.
+              await fetch(`${getOllamaUrl()}/api/chat`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                signal: controller.signal,
+                body: JSON.stringify({
+                  model,
+                  stream: true,
+                  messages: [
+                    { role: "system", content: chatSystemPrompt(ctx) },
+                    ...plain,
+                  ],
+                }),
+              });
 
         if (!res.ok || !res.body) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || "Ollama non è raggiungibile. Avvialo e riprova.");
+          throw new Error(
+            data.error ||
+              (provider === "gemini"
+                ? "Errore del servizio AI."
+                : "Ollama non è raggiungibile. Avvialo e riprova."),
+          );
         }
 
         const reader = res.body.getReader();
@@ -124,7 +146,7 @@ export function useAI({
         abortRef.current = null;
       }
     },
-    [messages, model, status, context],
+    [provider, messages, model, status, context],
   );
 
   const stop = useCallback(() => abortRef.current?.abort(), []);
