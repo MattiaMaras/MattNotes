@@ -9,11 +9,33 @@
  * context, so this is allowed even from an https page — but Ollama must permit
  * the page's origin via `OLLAMA_ORIGINS` (CORS).
  *
- * Override the target with `NEXT_PUBLIC_OLLAMA_URL` if Ollama runs elsewhere.
+ * The endpoint is resolved at RUNTIME (not baked into the build): the user's
+ * saved value (`ollamaUrlAtom` → localStorage) wins, else `NEXT_PUBLIC_OLLAMA_URL`,
+ * else `http://localhost:11434`. This lets the deployed site point at an HTTPS
+ * tunnel without a rebuild — and a public page can't call `http://localhost`.
  */
-export const OLLAMA_URL = (
+const OLLAMA_URL_STORAGE_KEY = "mattnotes:ollama-url";
+const DEFAULT_OLLAMA_URL = (
   process.env.NEXT_PUBLIC_OLLAMA_URL || "http://localhost:11434"
 ).replace(/\/+$/, "");
+
+/** Current Ollama base URL (no trailing slash), resolved at call time. */
+export function getOllamaUrl(): string {
+  if (typeof window !== "undefined") {
+    try {
+      // atomWithStorage persists JSON, so the stored value is a quoted string.
+      const stored = JSON.parse(
+        localStorage.getItem(OLLAMA_URL_STORAGE_KEY) || '""',
+      );
+      if (typeof stored === "string" && stored.trim()) {
+        return stored.trim().replace(/\/+$/, "");
+      }
+    } catch {
+      /* fall through to default */
+    }
+  }
+  return DEFAULT_OLLAMA_URL;
+}
 
 const MAX_CONTEXT_CHARS = 6000;
 
@@ -46,7 +68,7 @@ export async function generateFlashcards(
   model: string,
   context: string,
 ): Promise<GeneratedCard[]> {
-  const res = await fetch(`${OLLAMA_URL}/api/chat`, {
+  const res = await fetch(`${getOllamaUrl()}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

@@ -86,6 +86,19 @@ export const selectedModelAtom = atomWithStorage<string>(
 /** Live list of installed Ollama models (from `/api/tags`). Not persisted. */
 export const ollamaModelsAtom = atom<string[]>([]);
 
+/**
+ * Ollama endpoint, configurable at runtime (persisted). Empty → use the default
+ * (`NEXT_PUBLIC_OLLAMA_URL` or `http://localhost:11434`). On the public site,
+ * the user pastes their HTTPS tunnel URL here so the browser can reach their
+ * Ollama (a public page can't call `http://localhost`). See `lib/ollama.ts`.
+ */
+export const ollamaUrlAtom = atomWithStorage<string>(
+  "mattnotes:ollama-url",
+  "",
+  undefined,
+  { getOnInit: true },
+);
+
 // --- UI-only atoms (not persisted) -----------------------------------------
 
 /** Zen mode hides the sidebar and AI panel (⌘⇧Z). */

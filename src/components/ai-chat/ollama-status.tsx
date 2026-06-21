@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAtom } from "jotai";
 import { AlertTriangle, Loader2, Plug } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getOllamaUrl } from "@/lib/ollama";
+import { ollamaUrlAtom } from "@/lib/store/atoms";
 
 type Status = "checking" | "online" | "offline";
-
-const OLLAMA_TAGS_URL = "http://localhost:11434/api/tags";
 
 /**
  * Pings the local Ollama server. On failure it renders the "Avvia Ollama"
@@ -19,6 +20,13 @@ export function OllamaStatus({
   onModels?: (models: string[]) => void;
 }) {
   const [status, setStatus] = useState<Status>("checking");
+  const [ollamaUrl, setOllamaUrl] = useAtom(ollamaUrlAtom);
+  const [urlInput, setUrlInput] = useState(ollamaUrl);
+
+  function saveUrl() {
+    // Persist the endpoint; the effect below re-checks when `ollamaUrl` changes.
+    setOllamaUrl(urlInput.trim().replace(/\/+$/, ""));
+  }
 
   // Keep the latest `onModels` in a ref so `check` stays stable — otherwise the
   // effect below would re-run on every parent render (the parent recreates the
@@ -29,9 +37,8 @@ export function OllamaStatus({
   }, [onModels]);
 
   const check = useCallback(async () => {
-    setStatus("checking");
     try {
-      const res = await fetch(OLLAMA_TAGS_URL, { cache: "no-store" });
+      const res = await fetch(`${getOllamaUrl()}/api/tags`, { cache: "no-store" });
       if (!res.ok) throw new Error(String(res.status));
       const data: { models?: { name: string }[] } = await res.json();
       onModelsRef.current?.(data.models?.map((m) => m.name) ?? []);
@@ -41,10 +48,11 @@ export function OllamaStatus({
     }
   }, []);
 
-  // Ping once on mount; the "Riprova" button re-runs `check` manually.
+  // Ping on mount and whenever the configured Ollama URL changes; the "Riprova"
+  // button re-runs `check` manually.
   useEffect(() => {
     void check();
-  }, [check]);
+  }, [check, ollamaUrl]);
 
   if (status === "online") return null;
 
@@ -69,11 +77,31 @@ export function OllamaStatus({
             Ollama non attivo
           </p>
           <p className="text-muted-foreground">
-            Avvia Ollama in locale per usare l&apos;assistente AI.
+            Avvia Ollama in locale per usare l&apos;assistente AI. Sul sito
+            pubblico, incolla l&apos;URL HTTPS del tuo tunnel.
           </p>
+          <div className="flex items-center gap-1">
+            <input
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && saveUrl()}
+              placeholder="http://localhost:11434"
+              spellCheck={false}
+              className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 font-mono text-[11px] outline-none"
+            />
+            <button
+              onClick={saveUrl}
+              className="shrink-0 rounded-md border border-border px-2 py-1 transition-colors hover:bg-accent"
+            >
+              Salva
+            </button>
+          </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => void check()}
+              onClick={() => {
+                setStatus("checking");
+                void check();
+              }}
               className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 transition-colors hover:bg-accent"
             >
               <Plug className="size-3" />

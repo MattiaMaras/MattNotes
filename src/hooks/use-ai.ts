@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { OLLAMA_URL, chatSystemPrompt } from "@/lib/ollama";
+import { chatSystemPrompt, getOllamaUrl } from "@/lib/ollama";
 
 export interface ChatMessage {
   id: string;
@@ -50,7 +50,7 @@ export function useAI({
       abortRef.current = controller;
 
       try {
-        const res = await fetch(`${OLLAMA_URL}/api/chat`, {
+        const res = await fetch(`${getOllamaUrl()}/api/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: controller.signal,
