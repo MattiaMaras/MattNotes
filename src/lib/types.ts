@@ -102,3 +102,34 @@ export interface Flashcard {
   createdAt: string;
   updatedAt: string;
 }
+
+/** A highlighted text selection on one page of an uploaded PDF. */
+export interface PdfHighlight {
+  id: string;
+  page: number;
+  color: string;
+  /** Normalized (0–1) rects relative to the page's rendered width/height —
+   *  resolution-independent, so they scale with zoom/spread mode. */
+  rects: { x: number; y: number; width: number; height: number }[];
+  createdAt: string;
+}
+
+/**
+ * An uploaded PDF. The binary lives in Supabase Storage (`pdfs` bucket, see
+ * migration 0003), never in this record or `sync_items` — only metadata and
+ * highlights sync. `noteId` points at a normal {@link Note} (created
+ * alongside) used as the "side notes" panel next to the viewer, so it gets
+ * the full BlockNote editor (text/LaTeX/canvas/code) for free.
+ */
+export interface PdfDocument {
+  id: string;
+  title: string;
+  /** Storage object path: `{ownerId}/{id}.pdf`. */
+  storagePath: string;
+  /** Filled in after first open (react-pdf's `onLoadSuccess`). */
+  pageCount: number | null;
+  noteId: string;
+  highlights: PdfHighlight[];
+  createdAt: string;
+  updatedAt: string;
+}

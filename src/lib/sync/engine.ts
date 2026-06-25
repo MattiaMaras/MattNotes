@@ -2,13 +2,20 @@
 
 import type { WritableAtom, createStore } from "jotai";
 import { getSupabase } from "@/lib/supabase/client";
-import { flashcardsAtom, notebooksAtom, notesAtom } from "@/lib/store/atoms";
+import {
+  flashcardsAtom,
+  notebooksAtom,
+  notesAtom,
+  pdfDocumentsAtom,
+} from "@/lib/store/atoms";
 
 /**
  * Local-first sync engine.
  *
- * Notebooks, notes and flashcards are mirrored to a single `sync_items` table
- * as JSON blobs. Conflict resolution is last-write-wins on `updated_at`:
+ * Notebooks, notes, flashcards and PDF document metadata are mirrored to a
+ * single `sync_items` table as JSON blobs (the PDF binary itself lives in
+ * Supabase Storage — see `lib/supabase/storage.ts` — never in this table).
+ * Conflict resolution is last-write-wins on `updated_at`:
  *   - push: on every (debounced) local change, upsert rows whose version we
  *     haven't already synced, plus soft-delete rows that disappeared locally.
  *   - pull: on startup, fetch all rows and merge the newer side into the store.
@@ -20,7 +27,7 @@ import { flashcardsAtom, notebooksAtom, notesAtom } from "@/lib/store/atoms";
  */
 
 type JotaiStore = ReturnType<typeof createStore>;
-type Kind = "notebook" | "note" | "flashcard";
+type Kind = "notebook" | "note" | "flashcard" | "pdfdocument";
 
 interface SyncRow {
   id: string;
@@ -35,11 +42,12 @@ interface SyncRow {
 type Entity = { id: string; updatedAt: string };
 type ArrAtom = WritableAtom<Entity[], [Entity[]], void>;
 
-// The three synced collections, behind a common array-atom type.
+// The synced collections, behind a common array-atom type.
 const ATOMS: Record<Kind, ArrAtom> = {
   notebook: notebooksAtom as unknown as ArrAtom,
   note: notesAtom as unknown as ArrAtom,
   flashcard: flashcardsAtom as unknown as ArrAtom,
+  pdfdocument: pdfDocumentsAtom as unknown as ArrAtom,
 };
 
 interface Versioned {
@@ -98,6 +106,14 @@ function localItems(store: JotaiStore): LocalItem[] {
       kind: "flashcard",
       updated_at: f.updatedAt,
       data: f as unknown as Record<string, unknown>,
+    });
+  }
+  for (const p of store.get(pdfDocumentsAtom)) {
+    out.push({
+      id: p.id,
+      kind: "pdfdocument",
+      updated_at: p.updatedAt,
+      data: p as unknown as Record<string, unknown>,
     });
   }
   return out;
@@ -275,7 +291,7 @@ export function startSync(
     )
     .subscribe();
 
-  const unsubs = [notebooksAtom, notesAtom, flashcardsAtom].map((a) =>
+  const unsubs = [notebooksAtom, notesAtom, flashcardsAtom, pdfDocumentsAtom].map((a) =>
     store.sub(a, schedulePush),
   );
 

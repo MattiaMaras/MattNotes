@@ -16,6 +16,8 @@ import type {
   Note,
   Notebook,
   NoteSnapshot,
+  PdfDocument,
+  PdfHighlight,
   SnapshotKind,
   SyncStatus,
 } from "@/lib/types";
@@ -68,6 +70,13 @@ export const flashcardsAtom = atomWithStorage<Flashcard[]>(
 
 export const snapshotsAtom = atomWithStorage<NoteSnapshot[]>(
   `${STORAGE_KEY}:snapshots`,
+  [],
+  undefined,
+  { getOnInit: true },
+);
+
+export const pdfDocumentsAtom = atomWithStorage<PdfDocument[]>(
+  `${STORAGE_KEY}:pdfs`,
   [],
   undefined,
   { getOnInit: true },
@@ -451,6 +460,102 @@ export const dueFlashcardsAtom = atom((get) => {
   return get(flashcardsAtom)
     .filter((c) => new Date(c.dueAt).getTime() <= nowMs)
     .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+});
+
+// --- PDF documents -----------------------------------------------------------
+
+/** Create a PDF document record + its companion side-notes note (a normal,
+ *  top-level Note — gives the side panel the full BlockNote editor for free).
+ *  The caller is expected to have already uploaded the binary to Storage. */
+export const createPdfDocumentAtom = atom(
+  null,
+  (get, set, payload: { title: string; storagePath: string }): PdfDocument => {
+    const ts = now();
+    const noteId = set(createNoteAtom, null);
+    const doc: PdfDocument = {
+      id: uid(),
+      title: payload.title,
+      storagePath: payload.storagePath,
+      pageCount: null,
+      noteId,
+      highlights: [],
+      createdAt: ts,
+      updatedAt: ts,
+    };
+    set(pdfDocumentsAtom, [...get(pdfDocumentsAtom), doc]);
+    return doc;
+  },
+);
+
+/** Patch a PDF document (title, or page count once react-pdf reports it). */
+export const updatePdfDocumentAtom = atom(
+  null,
+  (get, set, patch: Partial<Omit<PdfDocument, "id">> & { id: string }): void => {
+    set(
+      pdfDocumentsAtom,
+      get(pdfDocumentsAtom).map((d) =>
+        d.id === patch.id ? { ...d, ...patch, updatedAt: now() } : d,
+      ),
+    );
+  },
+);
+
+/** Add a highlight (selection rects already normalized 0–1 by the caller). */
+export const addPdfHighlightAtom = atom(
+  null,
+  (
+    get,
+    set,
+    payload: { pdfId: string; page: number; color: string; rects: PdfHighlight["rects"] },
+  ): void => {
+    const highlight: PdfHighlight = {
+      id: uid(),
+      page: payload.page,
+      color: payload.color,
+      rects: payload.rects,
+      createdAt: now(),
+    };
+    set(
+      pdfDocumentsAtom,
+      get(pdfDocumentsAtom).map((d) =>
+        d.id === payload.pdfId
+          ? { ...d, highlights: [...d.highlights, highlight], updatedAt: now() }
+          : d,
+      ),
+    );
+  },
+);
+
+/** Remove a highlight. */
+export const removePdfHighlightAtom = atom(
+  null,
+  (get, set, payload: { pdfId: string; highlightId: string }): void => {
+    set(
+      pdfDocumentsAtom,
+      get(pdfDocumentsAtom).map((d) =>
+        d.id === payload.pdfId
+          ? {
+              ...d,
+              highlights: d.highlights.filter((h) => h.id !== payload.highlightId),
+              updatedAt: now(),
+            }
+          : d,
+      ),
+    );
+  },
+);
+
+/** Delete a PDF document record and its companion note (local state only —
+ *  the caller removes the Storage binary first, see `lib/supabase/storage.ts`,
+ *  since that's a network call and atoms here stay network-free). */
+export const deletePdfDocumentAtom = atom(null, (get, set, id: string): void => {
+  const doc = get(pdfDocumentsAtom).find((d) => d.id === id);
+  if (!doc) return;
+  set(deleteNoteAtom, doc.noteId);
+  set(
+    pdfDocumentsAtom,
+    get(pdfDocumentsAtom).filter((d) => d.id !== id),
+  );
 });
 
 // --- Version history (snapshots) -------------------------------------------
