@@ -2,17 +2,17 @@
 
 import { useMemo } from "react";
 import { useTheme } from "@/components/providers/theme-provider";
-import {
-  BlockNoteSchema,
-  defaultBlockSpecs,
-  type PartialBlock,
-} from "@blocknote/core";
+import { type PartialBlock } from "@blocknote/core";
 import { filterSuggestionItems } from "@blocknote/core/extensions";
 import {
+  FormattingToolbar,
+  FormattingToolbarController,
   SuggestionMenuController,
   getDefaultReactSlashMenuItems,
+  getFormattingToolbarItems,
   useCreateBlockNote,
   type DefaultReactSuggestionItem,
+  type FormattingToolbarProps,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { FunctionSquare, PenLine, Terminal } from "lucide-react";
@@ -22,27 +22,25 @@ import "@blocknote/mantine/style.css";
 import "katex/dist/katex.min.css";
 
 import type { BlockNoteDocument } from "@/lib/types";
-import { latexBlock } from "@/components/editor/blocks/latex-block";
-import { canvasBlock } from "@/components/editor/blocks/canvas-block";
-import { codeBlock } from "@/components/editor/blocks/code-block";
+import { schema, type AppEditor } from "@/components/editor/schema";
+import {
+  FontFamilySelect,
+  FontSizeSelect,
+} from "@/components/editor/toolbar/font-toolbar-items";
 
-// Schema = default blocks + our custom LaTeX, Canvas and Code blocks. The block
-// factories are invoked here (the 0.51 `createReactBlockSpec` returns a factory).
-// The built-in (non-runnable) `codeBlock` is dropped so our runnable Python cell
-// is the only code option in the slash menu.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const { codeBlock: _builtinCodeBlock, ...baseBlockSpecs } = defaultBlockSpecs;
-
-const schema = BlockNoteSchema.create({
-  blockSpecs: {
-    ...baseBlockSpecs,
-    latex: latexBlock(),
-    canvas: canvasBlock(),
-    codeCell: codeBlock(),
-  },
-});
-
-type AppEditor = typeof schema.BlockNoteEditor;
+/** Default toolbar (bold/italic/color/...) plus our font family/size selects.
+ *  Only ever rendered while text is selected — never a standing control —
+ *  and the selects are marked `data-print-hide` so they can't leak into a PDF
+ *  export even if a selection happened to be live at click time. */
+function CustomFormattingToolbar(props: FormattingToolbarProps) {
+  return (
+    <FormattingToolbar {...props}>
+      {getFormattingToolbarItems()}
+      <FontFamilySelect key="fontFamilySelect" />
+      <FontSizeSelect key="fontSizeSelect" />
+    </FormattingToolbar>
+  );
+}
 
 /** Slash-menu entries for our custom blocks, merged with the defaults. */
 function customSlashItems(editor: AppEditor): DefaultReactSuggestionItem[] {
@@ -70,9 +68,9 @@ function customSlashItems(editor: AppEditor): DefaultReactSuggestionItem[] {
       },
     },
     {
-      title: "Codice Python",
-      subtext: "Cella Python eseguibile (Pyodide)",
-      aliases: ["code", "codice", "python", "py", "esegui", "run"],
+      title: "Blocco di codice",
+      subtext: "Evidenzia la sintassi; esecuzione Python via Pyodide",
+      aliases: ["code", "codice", "python", "py", "esegui", "run", "javascript", "java", "c++"],
       group: "Avanzati",
       icon: <Terminal className="size-4" />,
       onItemClick: () => {
@@ -122,6 +120,7 @@ export function BlockNoteEditor({
       editor={editor}
       theme={resolvedTheme === "dark" ? "dark" : "light"}
       slashMenu={false}
+      formattingToolbar={false}
       onChange={() => onChange(editor.document as BlockNoteDocument)}
       className="min-h-full"
     >
@@ -129,6 +128,7 @@ export function BlockNoteEditor({
         triggerCharacter="/"
         getItems={getSlashItems}
       />
+      <FormattingToolbarController formattingToolbar={CustomFormattingToolbar} />
     </BlockNoteView>
   );
 }

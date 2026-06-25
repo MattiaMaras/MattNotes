@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { createReactBlockSpec } from "@blocknote/react";
 import { Loader2, Play, Trash2 } from "lucide-react";
@@ -29,11 +29,32 @@ interface RenderProps {
   };
 }
 
-const PLACEHOLDER = "# Scrivi Python e premi Esegui\nprint('Ciao, MattNotes!')\n";
+/** Monaco language ids (built-in tokenizers — no extra setup needed). */
+const LANGUAGES = [
+  { id: "python", label: "Python" },
+  { id: "javascript", label: "JavaScript" },
+  { id: "typescript", label: "TypeScript" },
+  { id: "java", label: "Java" },
+  { id: "c", label: "C" },
+  { id: "cpp", label: "C++" },
+  { id: "csharp", label: "C#" },
+  { id: "go", label: "Go" },
+  { id: "rust", label: "Rust" },
+  { id: "php", label: "PHP" },
+  { id: "ruby", label: "Ruby" },
+  { id: "sql", label: "SQL" },
+  { id: "html", label: "HTML" },
+  { id: "css", label: "CSS" },
+  { id: "json", label: "JSON" },
+  { id: "shell", label: "Bash" },
+] as const;
+
+const PLACEHOLDER = "# Scrivi codice qui\nprint('Ciao, MattNotes!')\n";
 
 function CodeComponent({ block, editor }: RenderProps) {
   const { resolvedTheme } = useTheme();
   const [code, setCode] = useState(block.props.code);
+  const [language, setLanguage] = useState(block.props.language || "python");
   const [running, setRunning] = useState(false);
   // `loading` tracks the one-time Pyodide WASM download (shared across blocks).
   const [loading, setLoading] = useState(getPhase() === "loading");
@@ -42,8 +63,6 @@ function CodeComponent({ block, editor }: RenderProps) {
   );
   // Auto-grow the editor with its content (Monaco needs an explicit height).
   const [height, setHeight] = useState(160);
-  const codeRef = useRef(code);
-  codeRef.current = code;
 
   useEffect(() => onPhaseChange((p) => setLoading(p === "loading")), []);
 
@@ -52,11 +71,16 @@ function CodeComponent({ block, editor }: RenderProps) {
     editor.updateBlock({ id: block.id }, { props: { code: next } });
   }
 
+  function commitLanguage(next: string) {
+    setLanguage(next);
+    editor.updateBlock({ id: block.id }, { props: { language: next } });
+  }
+
   async function execute() {
     setRunning(true);
     setResult(null);
     try {
-      const r = await runPython(codeRef.current || "");
+      const r = await runPython(code || "");
       setResult(r);
     } catch (err) {
       setResult({
@@ -77,9 +101,20 @@ function CodeComponent({ block, editor }: RenderProps) {
 
   return (
     <div className="my-1 w-full overflow-hidden rounded-lg border border-border bg-muted/20 print:break-inside-avoid">
-      {/* Header: language label + run button */}
+      {/* Header: language picker + run button */}
       <div className="flex items-center gap-2 border-b border-border bg-muted/40 px-3 py-1.5">
-        <span className="font-mono text-xs text-muted-foreground">Python</span>
+        <select
+          value={language}
+          onChange={(e) => commitLanguage(e.target.value)}
+          aria-label="Linguaggio"
+          className="rounded-md border border-transparent bg-transparent font-mono text-xs text-muted-foreground outline-none transition-colors hover:border-border hover:bg-background focus:border-border"
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.label}
+            </option>
+          ))}
+        </select>
         <div className="ml-auto flex items-center gap-1">
           {result && (
             <Button
@@ -93,28 +128,30 @@ function CodeComponent({ block, editor }: RenderProps) {
               <Trash2 className="size-3.5" />
             </Button>
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={execute}
-            disabled={running || loading}
-            className="h-7 gap-1.5 px-2 text-xs"
-          >
-            {running || loading ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Play className="size-3.5 fill-current" />
-            )}
-            {loading ? "Avvio runtime…" : running ? "In esecuzione…" : "Esegui"}
-          </Button>
+          {language === "python" && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={execute}
+              disabled={running || loading}
+              className="h-7 gap-1.5 px-2 text-xs"
+            >
+              {running || loading ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Play className="size-3.5 fill-current" />
+              )}
+              {loading ? "Avvio runtime…" : running ? "In esecuzione…" : "Esegui"}
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Monaco editor */}
       <div className="bg-[var(--bn-colors-editor-background,transparent)]">
         <MonacoEditor
-          language="python"
+          language={language}
           value={code}
           onChange={(v) => commit(v ?? "")}
           theme={resolvedTheme === "dark" ? "vs-dark" : "light"}
