@@ -10,6 +10,7 @@ import {
   flashcardsAtom,
   notebooksAtom,
   notesAtom,
+  pdfDocumentsAtom,
   snapshotsAtom,
 } from "@/lib/store/atoms";
 
@@ -51,6 +52,7 @@ export function SyncProvider() {
       store.set(notesAtom, []);
       store.set(flashcardsAtom, []);
       store.set(snapshotsAtom, []);
+      store.set(pdfDocumentsAtom, []);
       localStorage.setItem(CACHE_OWNER_KEY, userId);
     }
 

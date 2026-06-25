@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useSetAtom } from "jotai";
 import { Show, SignInButton, UserButton } from "@clerk/nextjs";
-import { Command, LogIn, NotebookPen, PanelLeftClose } from "lucide-react";
+import { Command, FileText, LogIn, NotebookPen, PanelLeftClose } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -17,6 +19,8 @@ import { SubjectTree } from "@/components/sidebar/subject-tree";
 /** Sidebar container: brand header, command-palette launcher, and the tree. */
 export function AppSidebar({ onCollapse }: { onCollapse?: () => void }) {
   const setPaletteOpen = useSetAtom(commandPaletteOpenAtom);
+  const pathname = usePathname();
+  const pdfsActive = pathname?.startsWith("/pdfs");
 
   return (
     <div className="flex h-full flex-col border-r border-sidebar-border bg-sidebar">
@@ -56,6 +60,21 @@ export function AppSidebar({ onCollapse }: { onCollapse?: () => void }) {
             ⌘K
           </kbd>
         </Button>
+      </div>
+
+      <div className="px-3 pb-2">
+        <Link
+          href="/pdfs"
+          className={cn(
+            "flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm transition-colors",
+            pdfsActive
+              ? "bg-accent text-foreground"
+              : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+          )}
+        >
+          <FileText className="size-3.5" />
+          I tuoi PDF
+        </Link>
       </div>
 
       <SubjectTree />

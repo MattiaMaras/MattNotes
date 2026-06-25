@@ -469,11 +469,18 @@ export const dueFlashcardsAtom = atom((get) => {
  *  The caller is expected to have already uploaded the binary to Storage. */
 export const createPdfDocumentAtom = atom(
   null,
-  (get, set, payload: { title: string; storagePath: string }): PdfDocument => {
+  (
+    get,
+    set,
+    // `id` is settable because the storage upload needs the final path
+    // (`{ownerId}/{id}.pdf`) *before* this atom runs — the caller generates
+    // it upfront and uploads first, then records the metadata here.
+    payload: { id?: string; title: string; storagePath: string },
+  ): PdfDocument => {
     const ts = now();
     const noteId = set(createNoteAtom, null);
     const doc: PdfDocument = {
-      id: uid(),
+      id: payload.id ?? uid(),
       title: payload.title,
       storagePath: payload.storagePath,
       pageCount: null,
