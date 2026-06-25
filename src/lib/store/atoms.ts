@@ -75,8 +75,9 @@ export const snapshotsAtom = atomWithStorage<NoteSnapshot[]>(
 
 // --- AI provider + model selection -----------------------------------------
 
-/** Which AI backend to use. `gemini` runs in the cloud (Vercel serverless, free
- *  tier) and is the default; `ollama` runs locally on the user's machine. */
+/** Which AI backend to use. `gemini` is BYOK (the user's own free API key,
+ *  called directly from the browser — see `lib/gemini.ts`) and is the
+ *  default; `ollama` runs locally on the user's machine. */
 export type AiProvider = "gemini" | "ollama";
 
 export const aiProviderAtom = atomWithStorage<AiProvider>(
@@ -93,6 +94,19 @@ export const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"] as const;
 export const geminiModelAtom = atomWithStorage<string>(
   "mattnotes:gemini-model",
   GEMINI_MODELS[0],
+  undefined,
+  { getOnInit: true },
+);
+
+/**
+ * BYOK: the user's own Gemini API key, persisted in their browser only. Sent
+ * directly from the browser to Google (`generativelanguage.googleapis.com`,
+ * which allows CORS) — it never touches our server, so nobody shares anyone
+ * else's quota. Get a free one at https://aistudio.google.com/apikey.
+ */
+export const geminiApiKeyAtom = atomWithStorage<string>(
+  "mattnotes:gemini-api-key",
+  "",
   undefined,
   { getOnInit: true },
 );

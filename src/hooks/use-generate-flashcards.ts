@@ -6,21 +6,24 @@ import { toast } from "sonner";
 import {
   aiProviderAtom,
   createFlashcardsAtom,
+  geminiApiKeyAtom,
   geminiModelAtom,
   notesAtom,
   selectedModelAtom,
 } from "@/lib/store/atoms";
 import { blocksToPlainText } from "@/lib/note-text";
 import { generateFlashcards } from "@/lib/ollama";
+import { generateGeminiFlashcards } from "@/lib/gemini";
 
 /**
- * Generates flashcards for a note via the local AI and saves them. Surfaces
- * progress through toasts; returns how many cards were created (0 on failure).
+ * Generates flashcards for a note via AI and saves them. Surfaces progress
+ * through toasts; returns how many cards were created (0 on failure).
  */
 export function useGenerateFlashcards() {
   const provider = useAtomValue(aiProviderAtom);
   const ollamaModel = useAtomValue(selectedModelAtom);
   const geminiModel = useAtomValue(geminiModelAtom);
+  const geminiApiKey = useAtomValue(geminiApiKeyAtom);
   const model = provider === "gemini" ? geminiModel : ollamaModel;
   const notes = useAtomValue(notesAtom);
   const createCards = useSetAtom(createFlashcardsAtom);
@@ -34,6 +37,10 @@ export function useGenerateFlashcards() {
         toast.error("Seleziona un modello AI nel pannello Assistente.");
         return 0;
       }
+      if (provider === "gemini" && !geminiApiKey) {
+        toast.error("Inserisci la tua chiave API Gemini nel pannello Assistente.");
+        return 0;
+      }
 
       const context = `Titolo: ${note.title}\n\n${blocksToPlainText(note.content)}`;
       if (context.trim().length < 10) {
@@ -44,19 +51,10 @@ export function useGenerateFlashcards() {
       setGenerating(true);
       const toastId = toast.loading("Genero le flashcard…");
       try {
-        let cards: { question: string; answer: string }[];
-        if (provider === "gemini") {
-          const res = await fetch("/api/ai/flashcards", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model, context }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || "Errore di generazione.");
-          cards = (data.cards ?? []) as { question: string; answer: string }[];
-        } else {
-          cards = await generateFlashcards(model, context);
-        }
+        const cards =
+          provider === "gemini"
+            ? await generateGeminiFlashcards(geminiApiKey, model, context)
+            : await generateFlashcards(model, context);
         if (cards.length === 0) throw new Error("Nessuna flashcard generata.");
 
         const n = createCards({
@@ -75,7 +73,7 @@ export function useGenerateFlashcards() {
         setGenerating(false);
       }
     },
-    [provider, model, notes, createCards],
+    [provider, model, geminiApiKey, notes, createCards],
   );
 
   return { generate, generating };

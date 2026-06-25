@@ -7,6 +7,7 @@ import {
   Sparkles,
   BookOpen,
   HelpCircle,
+  KeyRound,
   ListChecks,
   PanelRightClose,
   Send,
@@ -24,6 +25,7 @@ import {
   GEMINI_MODELS,
   aiGuideDismissedAtom,
   aiProviderAtom,
+  geminiApiKeyAtom,
   geminiModelAtom,
   notesAtom,
   ollamaModelsAtom,
@@ -32,6 +34,7 @@ import {
 import { blocksToPlainText } from "@/lib/note-text";
 import { useAI } from "@/hooks/use-ai";
 import { OllamaStatus } from "@/components/ai-chat/ollama-status";
+import { GeminiStatus } from "@/components/ai-chat/gemini-status";
 import { AiGuide } from "@/components/ai-chat/ai-guide";
 import { MarkdownMessage } from "@/components/ai-chat/markdown-message";
 
@@ -66,6 +69,8 @@ export function ChatPanel({ onCollapse }: { onCollapse?: () => void }) {
   const [models, setModels] = useAtom(ollamaModelsAtom);
   const [model, setModel] = useAtom(selectedModelAtom);
   const [geminiModel, setGeminiModel] = useAtom(geminiModelAtom);
+  const geminiApiKey = useAtomValue(geminiApiKeyAtom);
+  const [manageKey, setManageKey] = useState(false);
   const [guideDismissed, setGuideDismissed] = useAtom(aiGuideDismissedAtom);
   const [showGuide, setShowGuide] = useState(!guideDismissed);
   const [input, setInput] = useState("");
@@ -77,17 +82,18 @@ export function ChatPanel({ onCollapse }: { onCollapse?: () => void }) {
     return note ? `Titolo: ${note.title}\n\n${blocksToPlainText(note.content)}` : "";
   }, [notes, params?.id]);
 
-  // Active model + readiness depend on the provider: Gemini always has a model
-  // (cloud), Ollama needs one discovered from the local server.
+  // Active model + readiness depend on the provider: Gemini needs the user's
+  // own key (BYOK), Ollama needs a model discovered from the local server.
   const activeModel = provider === "gemini" ? geminiModel : model;
   const { messages, status, error, send, stop, clear } = useAI({
     provider,
     model: activeModel,
+    apiKey: geminiApiKey,
     context: getContext,
   });
 
   const streaming = status === "streaming";
-  const ready = Boolean(activeModel);
+  const ready = Boolean(activeModel) && (provider !== "gemini" || Boolean(geminiApiKey));
 
   const handleModels = useCallback(
     (list: string[]) => {
@@ -184,18 +190,39 @@ export function ChatPanel({ onCollapse }: { onCollapse?: () => void }) {
         </div>
 
         {provider === "gemini" ? (
-          <select
-            value={geminiModel}
-            onChange={(e) => setGeminiModel(e.target.value)}
-            className="ml-auto max-w-40 rounded-md border border-border bg-transparent px-2 py-1 text-xs"
-            aria-label="Modello Gemini"
-          >
-            {GEMINI_MODELS.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
+          <>
+            <select
+              value={geminiModel}
+              onChange={(e) => setGeminiModel(e.target.value)}
+              className="ml-auto max-w-32 rounded-md border border-border bg-transparent px-2 py-1 text-xs"
+              aria-label="Modello Gemini"
+            >
+              {GEMINI_MODELS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setManageKey((s) => !s)}
+                  aria-label="Gestisci chiave API Gemini"
+                  className={cn(
+                    "rounded-md border p-1.5 transition-colors",
+                    geminiApiKey
+                      ? "border-border text-muted-foreground hover:text-foreground"
+                      : "border-amber-500/40 text-amber-600 dark:text-amber-400",
+                  )}
+                >
+                  <KeyRound className="size-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {geminiApiKey ? "Cambia chiave API" : "Inserisci la chiave API"}
+              </TooltipContent>
+            </Tooltip>
+          </>
         ) : models.length > 0 ? (
           <select
             value={model}
@@ -216,10 +243,15 @@ export function ChatPanel({ onCollapse }: { onCollapse?: () => void }) {
         )}
       </div>
 
-      {provider === "ollama" && <OllamaStatus onModels={handleModels} />}
+      {provider === "gemini" ? (
+        <GeminiStatus forceOpen={manageKey} onSaved={() => setManageKey(false)} />
+      ) : (
+        <OllamaStatus onModels={handleModels} />
+      )}
 
       {showGuide && (
         <AiGuide
+          provider={provider}
           onDismiss={() => {
             setGuideDismissed(true);
             setShowGuide(false);
@@ -294,7 +326,11 @@ export function ChatPanel({ onCollapse }: { onCollapse?: () => void }) {
             disabled={!ready}
             rows={1}
             placeholder={
-              ready ? "Chiedi a MattIA…" : "Seleziona un modello per iniziare"
+              ready
+                ? "Chiedi a MattIA…"
+                : provider === "gemini"
+                  ? "Inserisci la chiave API Gemini per iniziare"
+                  : "Seleziona un modello per iniziare"
             }
             className="max-h-32 flex-1 resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
           />

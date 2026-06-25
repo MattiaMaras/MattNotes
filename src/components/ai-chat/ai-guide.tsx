@@ -3,10 +3,48 @@
 import { useState } from "react";
 import { Check, Copy, Lock, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { AiProvider } from "@/lib/store/atoms";
 
 const PULL_COMMAND = "ollama pull qwen3.6";
 
-const STEPS: { title: string; body: React.ReactNode }[] = [
+const GEMINI_STEPS: { title: string; body: React.ReactNode }[] = [
+  {
+    title: "Ottieni una chiave gratis",
+    body: (
+      <>
+        Vai su{" "}
+        <a
+          href="https://aistudio.google.com/apikey"
+          target="_blank"
+          rel="noreferrer"
+          className="text-primary underline-offset-2 hover:underline"
+        >
+          Google AI Studio
+        </a>{" "}
+        e crea una API key (piano gratuito).
+      </>
+    ),
+  },
+  {
+    title: "Incollala qui",
+    body: <>Usa l&apos;icona della chiave 🔑 in alto in questo pannello.</>,
+  },
+  {
+    title: "Scegli un modello",
+    body: <>Resta su Flash per risposte rapide, o cambialo dal menu in alto.</>,
+  },
+  {
+    title: "Chiedi pure",
+    body: (
+      <>
+        Scrivi una domanda o usa le azioni rapide: la nota corrente viene usata
+        come contesto.
+      </>
+    ),
+  },
+];
+
+const OLLAMA_STEPS: { title: string; body: React.ReactNode }[] = [
   {
     title: "Installa e avvia Ollama",
     body: (
@@ -44,11 +82,19 @@ const STEPS: { title: string; body: React.ReactNode }[] = [
 ];
 
 /**
- * Compact in-panel guide that walks the user through getting the local AI
- * assistant working. Dismissable; re-openable from the panel header (?).
+ * Compact in-panel guide that walks the user through getting the AI assistant
+ * working, with content tailored to the active provider. Dismissable;
+ * re-openable from the panel header (?).
  */
-export function AiGuide({ onDismiss }: { onDismiss: () => void }) {
+export function AiGuide({
+  provider,
+  onDismiss,
+}: {
+  provider: AiProvider;
+  onDismiss: () => void;
+}) {
   const [copied, setCopied] = useState(false);
+  const steps = provider === "gemini" ? GEMINI_STEPS : OLLAMA_STEPS;
 
   async function copyCommand() {
     try {
@@ -74,7 +120,7 @@ export function AiGuide({ onDismiss }: { onDismiss: () => void }) {
       </div>
 
       <ol className="space-y-2 text-xs text-muted-foreground">
-        {STEPS.map((step, i) => (
+        {steps.map((step, i) => (
           <li key={step.title} className="flex gap-2">
             <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
               {i + 1}
@@ -87,30 +133,40 @@ export function AiGuide({ onDismiss }: { onDismiss: () => void }) {
         ))}
       </ol>
 
-      {/* Copyable pull command. */}
-      <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2 py-1.5">
-        <code className="truncate font-mono text-xs">{PULL_COMMAND}</code>
-        <button
-          onClick={copyCommand}
-          aria-label="Copia comando"
-          className={cn(
-            "shrink-0 rounded p-1 transition-colors",
-            copied ? "text-emerald-500" : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-        </button>
-      </div>
-      <p className="mt-2 text-[11px] text-muted-foreground">
-        Modelli consigliati: <span className="font-medium">qwen3.6</span>,{" "}
-        <span className="font-medium">llama3.2</span>,{" "}
-        <span className="font-medium">deepseek-r1</span>.
-      </p>
+      {provider === "ollama" && (
+        <>
+          {/* Copyable pull command. */}
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2 py-1.5">
+            <code className="truncate font-mono text-xs">{PULL_COMMAND}</code>
+            <button
+              onClick={copyCommand}
+              aria-label="Copia comando"
+              className={cn(
+                "shrink-0 rounded p-1 transition-colors",
+                copied ? "text-emerald-500" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Modelli consigliati: <span className="font-medium">qwen3.6</span>,{" "}
+            <span className="font-medium">llama3.2</span>,{" "}
+            <span className="font-medium">deepseek-r1</span>.
+          </p>
+          <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <Lock className="size-3" />
+            Tutto in locale: nessun dato lascia il tuo computer.
+          </p>
+        </>
+      )}
 
-      <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-        <Lock className="size-3" />
-        Tutto in locale: nessun dato lascia il tuo computer.
-      </p>
+      {provider === "gemini" && (
+        <p className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Lock className="size-3" />
+          La chiave resta solo nel tuo browser, non passa dai nostri server.
+        </p>
+      )}
     </div>
   );
 }
