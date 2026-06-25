@@ -6,6 +6,7 @@ import { createReactBlockSpec } from "@blocknote/react";
 import { Check, Hand, Loader2, Pencil, PenLine } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CanvasErrorBoundary } from "@/components/editor/blocks/canvas-error-boundary";
 
 // Tldraw is heavy (~canvas engine), so it's loaded only when a CanvasBlock
 // actually renders, with a skeleton in the meantime.
@@ -92,7 +93,9 @@ function CanvasComponent({ block, editor }: RenderProps) {
           onDoubleClick={() => setEditing(true)}
         >
           {hasDrawing ? (
-            <CanvasPreview snapshot={block.props.snapshot} />
+            <CanvasErrorBoundary>
+              <CanvasPreview snapshot={block.props.snapshot} />
+            </CanvasErrorBoundary>
           ) : (
             <button
               data-print-hide
@@ -146,11 +149,13 @@ function CanvasComponent({ block, editor }: RenderProps) {
 
       {/* `relative` so the absolutely-positioned tldraw surface fills it. */}
       <div className="relative w-full" style={{ height }}>
-        <TldrawCanvas
-          initialSnapshot={block.props.snapshot}
-          palmRejection={palmRejection}
-          onSnapshot={handleSnapshot}
-        />
+        <CanvasErrorBoundary>
+          <TldrawCanvas
+            initialSnapshot={block.props.snapshot}
+            palmRejection={palmRejection}
+            onSnapshot={handleSnapshot}
+          />
+        </CanvasErrorBoundary>
       </div>
 
       <div

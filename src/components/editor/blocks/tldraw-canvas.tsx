@@ -58,23 +58,48 @@ export function TldrawCanvas({
     });
   }, [resolvedTheme]);
 
-  // Subscribe to document changes and persist a debounced snapshot.
+  // Subscribe to document changes and persist a throttled snapshot. A longer
+  // interval (vs. the previous 800ms debounce) means far fewer heavy
+  // JSON.stringify + localStorage round-trips during a long drawing session
+  // — each one serializes the WHOLE workspace, not just this note, and doing
+  // that every ~800ms while the pencil is moving is exactly the kind of
+  // main-thread/memory pressure that can make Safari drop a canvas's backing
+  // store (the "turns all white" symptom).
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
+    const FLUSH_INTERVAL_MS = 4000;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastFlush = 0;
+
+    const flush = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      lastFlush = Date.now();
+      onSnapshot(JSON.stringify(getSnapshot(editor.store)));
+    };
+
     const unsub = editor.store.listen(
       () => {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => {
-          onSnapshot(JSON.stringify(getSnapshot(editor.store)));
-        }, 800);
+        const elapsed = Date.now() - lastFlush;
+        if (elapsed >= FLUSH_INTERVAL_MS) {
+          flush();
+        } else if (!timer) {
+          timer = setTimeout(flush, FLUSH_INTERVAL_MS - elapsed);
+        }
       },
       { scope: "document", source: "user" },
     );
+
     return () => {
-      if (timer) clearTimeout(timer);
       unsub();
+      // The previous version just cleared the pending timer here, which
+      // meant closing the canvas (or switching notes) right after drawing —
+      // before the throttle window elapsed — silently dropped the last few
+      // seconds of strokes. Flush unconditionally on unmount instead.
+      flush();
     };
     // Re-bind if the editor instance changes (it won't after mount, but this
     // keeps the effect honest). `onSnapshot` is stable from the parent.
